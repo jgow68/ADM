@@ -9,11 +9,7 @@ y = scale(y)
 
 LS = solve( t(X) %*% X) %*% t(X) %*% y # LS model produce singularity error due to p >> ns
 
-# fit the Ridge and Lasso model, then plot the coefficient solution path for fun????
 library('glmnet')
-
-outLasso = glmnet(X,y)
-outRIDGE = glmnet(X,y, alpha=0)
 
 # plot coefficient paths to determine which are significant predictors
 plot(glmnet(X,y, alpha=0)); title("alpha=0", line=3)
@@ -30,6 +26,7 @@ plot(glmnet(X,y, alpha=1), label=T); title("alpha=1", line=3) #3655, 6252
 
 # use a nfold CV to determine optimal lambda for different alphs
 # 5 fold CV for each alpha = 0, 0.1, ..., 1, due to small sample size, 
+set.seed(1234)
 foldid_set = sample(1:5, size=length(y), replace=T) #set same foldid for each cv.glmnet runs for different alpha
 test_alpha_lambda = vector(length = 11)
 test_alpha_cvm = vector(length=11)
@@ -46,6 +43,7 @@ for (i in 1:11) {
 for (i in 1:11) {
   assign(paste("fit", i, sep=""), cv.glmnet(X, y, alpha=i/10, foldid = foldid_set))
 }
+
 par(mfrow=c(1,1))
 plot(fit0); title("alpha=0", line=3)
 plot(fit1); title("alpha=0.1", line=3)
@@ -63,34 +61,27 @@ plot(fit10); title("alpha=1", line=3)
 library(caret)
 library(pROC)
 getModelInfo()$glmnet$type
-outcomename = y
 
 set.seed(1234)
 splitIndex = createDataPartition(y, p=0.75, list=F, times=1)
-trainDF = 
-testDF =
 
 objControl = trainControl(method="cv", number=5, returnResamp = 'none')
+eGrid = expand.grid(.alpha=seq(.05,1, by=0.01),
+                    .lambda=c((0.01:1)/10)) # why lambda is held constant??
 objModel = train(X[splitIndex, ], y[splitIndex,], method='glmnet', metric='RMSE',
-                 trControl=objControl)
+                 trControl=objControl, tuneGrid=eGrid)
+
+objModel
+objects(objModel)
+
 # RMSE was used to select the optimal model using  the smallest value.
 # The final values used for the model were alpha = 0.55 and lambda = 0.05380119. 
 
-predictions = predict(object=objModel, X[splitIndex,]) #useless?
+predictions = predict(object=objModel, X[-splitIndex,]) #useless?
 auc = multiclass.roc(y[splitIndex], predictions)
 print(auc$auc) #useless?
 plot(varImp(objModel,scale=F)) #useless?
 
-# not good 
-# we fit 3 models for alpha=0, 0.4 and 1
-lasso_model_lambda = glmnet(X, y, lambda=test_alpha_lambda[11], alpha=1)
-elastnet_model_lambda = glmnet(X, y, lambda=test_alpha_lambda[5], alpha=0.4)
-ridge_model_lambda = glmnet(X, y, lambda=test_alpha_lambda[1], alpha=0)
-
-# just plot to see the coefficient paths for alpha=0.4
-plot(glmnet(X,y, alpha=0.4), label=T) # 3655 at lower lambda , 5904, 6252 significant
-plot(glmnet(X, y, alpha=1), label=T) # 3655 at lower lambda, 5904, 6252 significant
-plot(glmnet(X, y, alpha=0), label=T)# not easy to idenify for ridge regression
 
 # we do 5-fold CV test on each model fit0 to fit10, MSE approach
 
